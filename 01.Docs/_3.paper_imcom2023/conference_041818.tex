@@ -1,0 +1,97 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Multi-Branch Neural Networks \\for Predicting Shared Bikes\\
+% {\footnotesize \textsuperscript{*}Note: Sub-titles are not captured in Xplore and
+% should not be used}
+\thanks{Corresponding authors: Dongsoo S. Kim and Hyunseung Choo}
+}
+
+\author{ Huigyu Yang$^1$, Syed M. Raza$^2$, Duc-Tai Le$^2$, Dongsoo S. Kim$^3$, Hyunseung Choo$^2$\\
+
+$^1$Dept. of Superintelligence Engineering, \textit{Sungkyunkwan University, Suwon, South Korea}\\ 
+$^2$Dept. of Electrical and Computer Engineering, \textit{Sungkyunkwan University, Suwon, South Korea}\\
+$^3$Dept. of Electrical and Computer Engineering, \textit{Indiana Uiversity-Purdue University, Indianapolis, USA} \\
+\textit{\{huigyu, syed.m.raza, ldtai, choo\}@skku.edu, dskim@iupui.edu}}
+
+\maketitle
+
+\begin{abstract}
+ Bike sharing systems are one of the sharing economies that aims to relieve the limited parking space of cities and to elevate public transportation. The sharing systems provide efficient user mobility as users determine the rental period of a sharing service according to their demand. They distinguish the service implementations into dock-based and dockless types. A dock refers a designated place and facilities where users rent or return the bikes. The dock requires the service provider to maintain its facilities such as the number of available bikes at each station (i.e., a group of docks). The dockless service allows user to start and end the rental service from anywhere. facilities such as the number of available bikes at each station (i.e., a group of docks). The dockless service allows user to start and end the rental service from anywhere.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Bike Sharing, Time-series Prediction, Multi-Branch Neural Network
+\end{IEEEkeywords}
+
+\section{Introduction}
+ Bike sharing systems are one of the sharing economies that aims to relieve the limited parking space of cities and to elevate public transportation. The sharing systems provide efficient user mobility as users determine the rental period of a sharing service according to their demand. They distinguish the service implementations into dock-based and dockless types. A dock refers a designated place and facilities where users rent or return the bikes. The dock requires the service provider to maintain its facilities such as the number of available bikes at each station (i.e., a group of docks). The dockless service allows user to start and end the rental service from anywhere. The users put additional efforts to find the available bikes, and the maintenance of the dockless service requires higher cost due to similar reason.
+
+ In most cities, residential or commercial areas are separated, so user movements are concentrated in specific areas depending on the region and time. Dock-based systems rent or return bikes at fixed service locations, resulting in insufficient or overflowing demand-supply balance problems depending on time and place. To address this problem, the system operator redeploys the bikes at regular intervals to distribute evenly across the stations. Demand-supply imbalances occur nonlinearly in terms of time, and time-consistent relocation causes overhead in service delivery. The prediction of the distribution status of a shared bicycle can estimate the time of need for relocation and enable efficient operating costs.
+
+ Early studies on bike sharing system have correlated user demands with environmental factors such as weather, public transportation, temporal factors, and safety [3, 4]. The models conduct convolutional neural networks to learn spatial characteristics of target region data and recurrent neural network families to utilize temporal characteristics of mobility [5]. These models have evolved to improve prediction accuracy through graph neural networks [6] or clustering techniques [7] which extract the correlation of the docks or various influential factors. These models have evolved to improve prediction accuracy through graph neural networks [6] or clustering techniques [7] which extract the correlation of the docks or various influential factors. 
+
+ In recent studies, the prediction models improved accuracy performance using fusion layers and residual connections on multiple input data such as geographical or meteorological information, and mobility patterns [5][8]. The limitation of these studies is that prediction results or performances of deep learning models are mainly presented rather than focused on rebalancing problem which remains as a challenging task.In recent studies, the prediction models improved accuracy performance using fusion layers and residual connections on multiple input data such as geographical or meteorological information, and mobility patterns [5][8]. The limitation of these studies is that prediction results or performances of deep learning models are mainly presented rather than focused on rebalancing problem which remains as a challenging task.
+
+ Our proposed model predicts In most cities, residential or commercial areas are separated, so user movements are concentrated in specific areas depending on the region and time. Dock-based systems rent or return bikes at fixed service locations, resulting in insufficient or overflowing demand-supply balance problems depending on time and place. To address this problem, the system operator redeploys the bikes at regular intervals to distribute evenly across the stations. Demand-supply imbalances occur nonlinearly in terms of time, and time-consistent relocation causes overhead in service delivery. The prediction of the distribution status of a shared bicycle can estimate the time of need for relocation and enable efficient operating costs.
+
+\section{Prediction model for Shared Bikes}
+
+\subsection{Bike Sharing Dataset}
+ Bike sharing services are actively used in various countries and cities such as Chicago, Washington, New York, Singapore, and Taipei. The system explicitly collects data generated from users' service use and provides anonymized data as a public dataset for research purposes in a standardized format. Datasets commonly include datetime, coordinates of rental and return locations, usage time, and some datasets additionally provide metadata such as season, weather, temperature, and humidity. Chicago's bike-sharing system also provides logs measuring the number of bicycles in 611 stations every 10 minutes and data recording anonymized user movements in coordinates. Due to its rich data properties, we leverage datasets collected in Chicago for training and testing prediction models.
+ 
+ Bike sharing services are actively used in various countries and cities such as Chicago, Washington, New York, Singapore, and Taipei. The system explicitly collects data generated from users' service use and provides anonymized data as a public dataset for research purposes in a standardized format. Datasets commonly include datetime, coordinates of rental and return locations, usage time, and some datasets additionally provide metadata such as season, weather, temperature, and humidity. Chicago's bike-sharing system also provides logs measuring the number of bicycles in 611 stations every 10 minutes and data recording anonymized user movements in coordinates. Due to its rich data properties, we leverage datasets collected in Chicago for training and testing prediction models.
+
+\subsection{Multi-branch Neural Networks}
+The proposed model predicts the available bikes $\hat{s}_(t+1)$ and classifies the events $e _(t+1)$ of the stations. Two LSTM layers of the model extract temporal features from dynamic patterns of the input sequence. The extracted features are represented in a 256-dimensional latent vector, where the dimensionality is determined by the LSTM cell. To result various types of outputs from the model, the latent vector is duplicated and passed to two different Fully-Connected (FC) layers. As shown in Fig. 1, FC Layers with Cross-Entropy (CE) and Root Mean Square Error (RMSE) convert the latent vector into the probability vector of events and the numbers of bikes, respectively. In the training phase, calculated losses from the event label and the bike amount individually backpropagate through each FC layer. This backpropagation jointly updates trainable parameters in LSTM layers after two FC layers.
+
+ The proposed model predicts the available bikes $\hat{s}_(t+1)$ and classifies the events $e_(t+1)$ of the stations. Two LSTM layers of the model extract temporal features from dynamic patterns of the input sequence. The extracted features are represented in a 256-dimensional latent vector, where the dimensionality is determined by the LSTM cell. To result various types of outputs from the model, the latent vector is duplicated and passed to two different Fully-Connected (FC) layers. As shown in Fig. 1, FC Layers with Cross-Entropy (CE) and Root Mean Square Error (RMSE) convert the latent vector into the probability vector of events and the numbers of bikes, respectively. In the training phase, calculated losses from the event label and the bike amount individually backpropagate through each FC layer. This backpropagation jointly updates trainable parameters in LSTM layers after two FC layers.
+
+ The proposed model predicts the available bikes $\hat{s}_(t+1)$ and classifies the events $e_(t+1)$ of the stations. Two LSTM layers of the model extract temporal features from dynamic patterns of the input sequence. The extracted features are represented in a 256-dimensional latent vector, where the dimensionality is determined by the LSTM cell. To result various types of outputs from the model, the latent vector is duplicated and passed to two different Fully-Connected (FC) layers. As shown in Fig. 1, FC Layers with Cross-Entropy (CE) and Root Mean Square Error (RMSE) convert the latent vector into the probability vector of events and the numbers of bikes, respectively. In the training phase, calculated losses from the event label and the bike amount individually backpropagate through each FC layer. This backpropagation jointly updates trainable parameters in LSTM layers after two FC layers.
+
+
+\section{Results and Analyses}
+Before you begin to format your paper, first write and save the content as a 
+separate text file. Complete all content and organizational editing before 
+% formatting. Please note sections \ref{AA}--\ref{SCM} below for more information on 
+proofreading, spelling and grammar.
+
+Keep your text and graphic files separate until after the text has been 
+formatted and styled. Do not number text heads---{\LaTeX} will do that 
+for you.
+
+\section{Conclusion and Future Work}
+
+\begin{figure}[htbp]
+% \centerline{\includegraphics{fig1.png}}
+\caption{Example of a figure caption.}
+\label{fig}
+\end{figure}
+
+\section*{Acknowledgment}
+This research was supported by the MSIT(Ministry of Science, ICT), Korea, under the ICT Creative Consilience program (IITP-2021-2020-0-01821) and High-Potential Individuals Global Training Program (IITP-2021-0-02132) supervised by the IITP(Institute for Information \& Communications Technology Planning \& Evaluation)
+
+\begin{thebibliography}{00}
+\bibitem{b1} G. Eason, B. Noble, and I. N. Sneddon, ``On certain integrals of Lipschitz-Hankel type involving products of Bessel functions,'' Phil. Trans. Roy. Soc. London, vol. A247, pp. 529--551, April 1955.
+\bibitem{b2} J. Clerk Maxwell, A Treatise on Electricity and Magnetism, 3rd ed., vol. 2. Oxford: Clarendon, 1892, pp.68--73.
+\bibitem{b3} I. S. Jacobs and C. P. Bean, ``Fine particles, thin films and exchange anisotropy,'' in Magnetism, vol. III, G. T. Rado and H. Suhl, Eds. New York: Academic, 1963, pp. 271--350.
+\bibitem{b4} K. Elissa, ``Title of paper if known,'' unpublished.
+\bibitem{b5} R. Nicole, ``Title of paper with only first word capitalized,'' J. Name Stand. Abbrev., in press.
+\bibitem{b6} Y. Yorozu, M. Hirano, K. Oka, and Y. Tagawa, ``Electron spectroscopy studies on magneto-optical media and plastic substrate interface,'' IEEE Transl. J. Magn. Japan, vol. 2, pp. 740--741, August 1987 [Digests 9th Annual Conf. Magnetics Japan, p. 301, 1982].
+\bibitem{b7} M. Young, The Technical Writer's Handbook. Mill Valley, CA: University Science, 1989.
+\end{thebibliography}
+\vspace{12pt}
+\color{red}
+IEEE conference templates contain guidance text for composing and formatting conference papers. Please ensure that all template text is removed from your conference paper prior to submission to the conference. Failure to remove the template text from your paper may result in your paper not being published.
+
+\end{document}
