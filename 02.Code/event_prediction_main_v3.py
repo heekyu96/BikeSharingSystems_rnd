@@ -17,7 +17,6 @@ import scipy
 
 from event_prediction_utils import _progressbar_printer
 from event_prediction_utils import model_weight_path, plot_path
-from event_prediction_data_v2 import *
 from event_prediction_data import *
 from event_prediction_models import Prediction_Model_v4_GRU, Prediction_Model_v3_LSTM,Prediction_Model_v5_LSTM_FFT
 
