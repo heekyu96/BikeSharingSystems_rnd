@@ -181,7 +181,9 @@ else: # Train
 test_batch_size = 1
 historical_station_dataset.set_test()
 test_loader = DataLoader(historical_station_dataset, test_batch_size)
-
+input_for_per_station_plot = []
+output_for_per_station_plot = []
+target_for_per_station_plot = []
 # if train:
 model.eval()
 
@@ -204,11 +206,14 @@ for batch_idx, data in enumerate(test_loader):
 
     if batch_idx % output_seq_len == 0 or batch_idx==0:
         outputs = []
+        outputs_p = []
         outputs_cate = []
         targets = []
+        targets_p = []
         targets_cate = []
         cur = tr_x
         delta_loss = 0
+        input_for_per_station_plot.append(np.transpose(tr_x.cpu().squeeze().data))
 
     if model.model_name.__contains__("FFT"):
         output_tensor,output_cate_tensor = model(tr_x,tr_x_fft)
@@ -220,19 +225,26 @@ for batch_idx, data in enumerate(test_loader):
         output = output_tensor.cpu().squeeze().data
         output_cate = torch.argmax(output_cate_tensor.cpu().squeeze().data,dim=-1)
         # output = np.transpose(output) # 0:time-steps, 1:stations
+        output_p = np.array(output)
         target = tr_y.cpu().squeeze().data  #
         target = np.transpose(target)  # 0:time-steps, 1:stations
+        target_p = np.array(target)
         target_cate = tr_y_cate.cpu().squeeze()
     else:
         output = output_tensor.squeeze().data
+        output_p = np.array(output)
         output_cate = torch.argmax(output_cate_tensor.squeeze().data,dim=-1)
+        
         target = tr_y.squeeze().data
         target = np.transpose(target)  # 0:time-steps, 1:stations
+        target_p = np.array(target)
         target_cate = tr_y_cate.squeeze()
 
     outputs.append(output)
+    outputs_p.append(output_p)
     outputs_cate.append(output_cate)
     targets.append(target)
+    targets_p.append(target_p)
     targets_cate.append(target_cate)
 
     # get loss according to delta
@@ -243,8 +255,10 @@ for batch_idx, data in enumerate(test_loader):
 
     if batch_idx % output_seq_len == output_seq_len - 1:
         predictions.append(outputs)
+        output_for_per_station_plot.append(np.transpose(np.array(outputs_p)))
         predictions_cate.append(outputs_cate)
         labels.append(targets)
+        target_for_per_station_plot.append(np.transpose(np.array(targets_p)))
         labels_cate.append(targets_cate)
 
     loss = loss_function(output_tensor, tr_y)
@@ -279,13 +293,19 @@ max_val_ = historical_station_dataset.max_val
 ##RMSE
 rmse_list = []
 rmse_cate_pred = []
+rmse_per_station_list = []
 for pred_label in zip(predictions, labels):
+    rmse_per_station = [[] for x in range(611)]
     rmse = [0 for x in range(0,144)]
     rmse_cate = []
     for d, pred_label_day in enumerate(zip(pred_label[0],pred_label[1])):
         loss_list_per_station = root_mean_squared_error(pred_label_day[0],pred_label_day[1])
+        for ps in range(len(loss_list_per_station)):
+            rmse_per_station[ps].append(loss_list_per_station[ps])
         rmse[d] = sum(loss_list_per_station)/len(loss_list_per_station)
     rmse_list.append(rmse)
+    rmse_per_station_list.append(rmse_per_station)
+
 
 rmse_day = [0 for x in range(0,144)]
 for rmse in rmse_list:
@@ -317,47 +337,54 @@ def mean_confidence_interval_rmse(points, max_val, confidence=0.95):
     
     return M, ci_h, ci_l
 
-rmse_m, rmse_ci_95_h,rmse_ci_95_l = mean_confidence_interval_rmse(rmse_list_for_CI, max_val=max_val_)
+rmse_m, rmse_ci_95_h,rmse_ci_95_l = mean_confidence_interval_rmse(rmse_list_for_CI, max_val=max_val_,confidence=0.925)
 rmse_m, rmse_ci_99_h,rmse_ci_99_l = mean_confidence_interval_rmse(rmse_list_for_CI, max_val=max_val_,confidence=0.99)
 # rmse_ci_99 = []
 
 ##loss plot
 fig, ax = plt.subplots(figsize=(20, 5))
-ax.set_ylabel("Predicted Nomalized number of bikes")
+ax.set_ylabel("RMSE of normalized bike counts",fontsize=13)
 ax.set_ylim([0.0, 1])
-ax.set_xlabel("Prediction Time (hour)")
+ax.set_xlabel("Prediction Time (hour)", fontsize=14)
 x_tick = [6*x for x in range(24)]+[144]
 ax.set_xticks(x_tick)
 ax.set_xticklabels([int(x/6) for x in x_tick])
 plt.grid(linestyle="--")
-ax.scatter([x+1 for x in range(len(rmse_day))], rmse_day,label="Normalized difference in the number of bikes")
-ax.legend(loc="lower right")
+# ax.scatter([x+1 for x in range(len(rmse_day))], rmse_day, label="Normalized difference in the number of bikes")
+# ax.scatter(color="orange",label="difference in the number of bikes")
+
+ax.bar(0, height=0, width=0, color="tan",label="92.5% Confidential Interval")
+ax.bar(0, height=0, width=0, color="wheat",label="99% Confidential Interval")
+ax.plot([x+1 for x in range(len(rmse_day))], rmse_m,color="orange",label="Bike counts")
+ax.scatter([x+1 for x in range(len(rmse_day))], rmse_day, label="Normalized bike counts")
+ax.legend(loc="upper left", ncol=2)
 ax2 = ax.twinx()
-ax2.set_ylabel("Predicted number of bikes ")
+ax2.set_ylabel("RMSE of bike counts", fontsize=13)
 # for rmse in rmse_list:
 #     ax2.scatter([x+1 for x in range(len(rmse))], [y*max_val_ for y in rmse],color="wheat")
 # for t, ci in enumerate(rmse_ci_95):
-ax2.fill_between([x+1 for x in range(len(rmse_day))],rmse_ci_95_h,rmse_ci_95_l,color="moccasin",alpha=0.5)
+
 # for t, ci in enumerate(rmse_ci_99):
 ax2.fill_between([x+1 for x in range(len(rmse_day))],rmse_ci_99_h,rmse_ci_99_l,color="wheat",alpha=0.5)
+ax2.fill_between([x+1 for x in range(len(rmse_day))],rmse_ci_95_h,rmse_ci_95_l,color="tan",alpha=0.5)
 ax2.plot([x+1 for x in range(len(rmse_day))], rmse_m,color="orange",label="difference in the number of bikes")
 # ax2.plot([x+1 for x in range(len(rmse_day))], [y*max_val_ for y in rmse_day],color="orange",label="bike amount difference")
 ax2.set_ylim([0.0, 6.5])
-ax2.legend(loc="upper right")
-ax.text(
-        0,
-        0.90,
-        "Avg. RMSE in the number of normalized bikes: "
-        + str(round(sum(rmse_m) / (len(rmse_m)*max_val_),2)),
-    )
-ax.text(
-        0,
-        0.95,
-        "Avg. RMSE in the number of bikes: "
-        + str(round(sum(rmse_m) / len(rmse_m),2)),
-    )
+# ax2.legend(loc="upper left", ncol=2)
+# ax.text(
+#         0,
+#         0.90,
+#         "Avg. RMSE in the number of normalized bikes: "
+#         + str(round(sum(rmse_m) / (len(rmse_m)*max_val_),2)),
+#     )
+# ax.text(
+#         0,
+#         0.95,
+#         "Avg. RMSE in the number of bikes: "
+#         + str(round(sum(rmse_m) / len(rmse_m),2)),
+#     )
 plt.savefig(
-    "./04.event_prediction/event_prediction_results/"
+    "./02.Code/event_prediction_results/"
     + "00.day_loss"
     + "_"
     + str(input_day * 24)
@@ -483,18 +510,23 @@ acc_m, acc_ci_99_h,acc_ci_99_l = mean_confidence_interval(acc_list_for_CI, confi
 # rmse_acc_m, rmse_acc_ci_99_h,rmse_acc_ci_99_l = mean_confidence_interval(rmse_acc_list_for_CI, confidence=0.99)
 
 fig, ax = plt.subplots(figsize=(20, 5))
-ax.set_ylabel("Prediction Accuracy (%)")
+ax.set_ylabel("Prediction Accuracy (%)", fontsize=13)
 ax.set_ylim([0, 104])
-ax.set_xlabel("Prediction Time (hour)")
+ax.set_xlabel("Prediction Time (hour)", fontsize=14)
 x_tick = [6*x for x in range(24)]+[144]
 ax.set_xticks(x_tick)
 ax.set_xticklabels([int(x/6) for x in x_tick])
 plt.grid(linestyle="--")
-ax.fill_between([x+1 for x in range(len(acc_day))],acc_ci_99_h,acc_ci_99_l,color="lightblue",alpha=0.5)
+
 ax.fill_between([x+1 for x in range(len(acc_day))],acc_ci_95_h,acc_ci_95_l,color="deepskyblue",alpha=0.5)
+ax.fill_between([x+1 for x in range(len(acc_day))],acc_ci_99_h,acc_ci_99_l,color="lightblue",alpha=0.5)
+
+ax.bar(0, height=0, width=0, color="deepskyblue",label="92.5% Confidential Interval")
+ax.bar(0, height=0, width=0, color="lightblue",label="99% Confidential Interval")
+
 # for t, ci in enumerate(rmse_ci_99):
 
-ax.plot([x+1 for x in range(len(acc_m))], acc_m, color = "royalblue", label="Prediction accuracy")
+ax.plot([x+1 for x in range(len(acc_m))], acc_m, color = "royalblue", label="Accuracy")
 # for t, ci in enumerate(rmse_ci_99):
 # ax.fill_between([x+1 for x in range(len(rmse_acc_day))],rmse_acc_ci_99_h,rmse_acc_ci_99_l,color="lightgray",alpha=0.5)
 # ax.fill_between([x+1 for x in range(len(rmse_acc_day))],rmse_acc_ci_95_h,rmse_acc_ci_95_l,color="lightsteelblue",alpha=0.5)
@@ -508,12 +540,12 @@ ax.legend(loc="lower right")
 # # ax2.scatter([x+1 for x in range(len(rmse_day))], [y*max_val_ for y in rmse_day],color="orange",label="bike amount difference")
 # ax2.set_ylim([0, 104])
 # ax2.legend(loc="upper right")
-ax.text(
-        0,
-        57,
-        "Avg. Accuracy for 1 day: "
-        + str(round(sum(acc_m) / len(acc_m),2)),
-    )
+# ax.text(
+#         0,
+#         57,
+#         "Avg. Accuracy for 1 day: "
+#         + str(round(sum(acc_m) / len(acc_m),2)),
+#     )
 # ax.text(
 #         0,
 #         50,
@@ -527,7 +559,7 @@ ax.text(
 #         + str(round(sum(rmse_day) / len(rmse_day)*max_val_,2)),
 #     )
 plt.savefig(
-    "./04.event_prediction/event_prediction_results/"
+    "./02.Code/event_prediction_results/"
     + "00.day_acc"
     + "_"
     + str(input_day * 24)
@@ -545,267 +577,43 @@ plt.savefig(
 )
 
 
-# # Ploting
-# predictions_plot = []  # tensor list
-# labels_plot = []  # tensor list
-# for data in zip(predictions, labels):
-#     if predictions_plot == []:
-#         predictions_plot = data[0]
-#     else:
-#         predictions_plot.append(data[0][-1])
-#     if labels_plot == []:
-#         labels_plot = data[1]
-#     else:
-#         labels_plot.append(data[1][-1])
-#
-# predictions_plot = torch.cat(predictions_plot, dim=0).reshape(
-#     -1, historical_station_dataset.station_count
-# )  # time-step X station
-# labels_plot = torch.cat(labels_plot, dim=0).reshape(
-#     -1, historical_station_dataset.station_count
-# )
+# ##  Plottings per station
+# # for in_out in zip(input_for_per_station_plot,rmse_per_station_list[0]):
+# for dir_, data_points in enumerate(zip(input_for_per_station_plot,output_for_per_station_plot, target_for_per_station_plot)):
+#     dir_path = "./02.Code/event_prediction_results/station_wise/"+str(dir_+1)+"/"
+#     file=0
+#     print(file)
+#     for inputt, outputt, targett in zip(data_points[0],data_points[1],data_points[2]):
+#         fig, ax = plt.subplots(figsize=(20, 5))
+#         ax.set_ylabel("Predicted shared bikes")
+#         # ax.set_ylim([0.0, 1])
+#         ax.set_xlabel("Prediction Time (Days)")
+#         x_tick = [24*6*x for x in range(8)]+[24*6*8]
+#         ax.set_xticks(x_tick)
+#         ax.set_xticklabels([int(x/(6*24)) for x in x_tick])
+#         plt.grid(linestyle="--")
+#         ax.plot([x+1 for x in range(len(inputt))], [in_*max_val_ for in_ in inputt],color = "forestgreen",label="The number of bikes in historical sequence")
+#         ax.plot([x+1+len(inputt) for x in range(len(outputt))], [out_*max_val_ for out_ in outputt],color = "goldenrod",label="The predicted number of bikes")
+#         ax.plot([x+1+len(inputt) for x in range(len(targett))], [tar_*max_val_ for tar_ in targett],color = "olivedrab",label="The number of bikes (Ground-Truth)")
+#         ax.legend(loc="lower left")
 
-# predictions_plot_byStation = np.transpose(predictions_plot.numpy())  # station x time-step
-# labels_plot_byStation = np.transpose(labels_plot.numpy()).tolist()
-
-#FFT##################################
-
-# for tested_result in zip(predictions,labels)
-
-
-# #loss calculation
-# losses_rmse = []
-# for xy in zip(predictions_plot_byStation,labels_plot_byStation):
-#     losses_rmse.append(root_mean_squared_error(xy[1],xy[0]))
-
-# losses_rmse_np_byStation = np.array(losses_rmse)
-# losses_rmse_np = np.transpose(losses_rmse_np_byStation)
-# losses_rmse = losses_rmse_np.tolist()
-# # input_, output_, plotx_ = train_dataset.getD4Plot()
-# # print(input_[0])
-# # print(len(input_[0]))
-# # print(plotx_[0])
-# # print(len(plotx_[0]))
-
-# # plot predicted bike amounts in all of stations
-# # upper_bound = [95.00 for x in range(len(predictions_plot_byStation[0]))]
-# # lower_bound = [5.00 for x in range(len(predictions_plot_byStation[0]))]
-# for i, data in enumerate(zip(predictions_plot_byStation, labels_plot_byStation)):
-#     if i == 2:
-#         break
-#     fig, ax1 = plt.subplots(figsize=(20, 5))
-
-#     # ax1.set_ylabel("Nomalized Bike Amount by Max Amount of All stations")
-#     # ax1.set_ylim([0.0, 1.0])
-#     plt.ylabel("Available Bike Amount (%)")
-#     plt.xlabel("Time-step (10 mins)")
-#     plt.text(
-#         0,
-#         -3,
-#         "Avg.loss: "
-#         + str(round(losses / len(test_loader), 4))
-#         + " converted:"
-#         + str(round(losses / len(test_loader) * historical_station_dataset.max_val, 4))
-#         + "(bikes)",
-#     )
-#     # plt.scatter(plotx_[0][0:input_seq_len], input_.tolist()[0], s=90, label='input')
-#     x_ = [x for x in range(len(data[0]))]
-
-#     max_val_ = historical_station_dataset.max_val
-#     total_dock_ = historical_station_dataset.station_total_dock[
-#         historical_station_dataset.station_list[i]
-#     ]
-#     data0_ = [round(x * max_val_ / total_dock_ * 100, 2) for x in data[0]]
-#     for i,x in enumerate(data0_): 
-#         if x<0: 
-#             data0_[i] = 0
-#     plt.scatter(
-#         x_,
-#         [round(x * max_val_ / total_dock_ * 100, 2) for x in data[1]],
-#         s=80,
-#         label="target",
-#     )
-#     plt.scatter(
-#         x_,
-#         # [round(x * max_val_ / total_dock_ * 100, 2) for x in data0_],
-#         data0_,
-#         label="output",
-#     )
-#     #boundary plots
-#     bound_plot_color = ["red","orange","gray","green","blue"]
-#     for l, bound in enumerate(boundary[1:-1]):
-#         plt.plot(x_, [int(bound*100) for x in range(len(x_))],linestyle="--", color=bound_plot_color[l], label=str(bound))
-#     plt.legend()
-
-#     plt.savefig(
-#         "./04.event_prediction/event_prediction_results/"
-#         + str(historical_station_dataset.station_list[i])
-#         + "_"
-#         + str(input_day * 24)
-#         + "_"
-#         + str(output_day * 24)
-#         + "_"
-#         + str(epoch)
-#         + ".png",
-#         dpi=500,
-#         edgecolor="white",
-#         bbox_inches="tight",
-#         pad_inches=0.2,
-#     )
-
-# #LOSS############################################
-# fig, ax = plt.subplots(figsize=(20, 5))
-# ax.set_ylabel("Nomalized Bike Amount")
-# ax.set_ylim([0.0, 0.01])
-# ax.set_xlabel("Offset (10 mins interval)")
-# plt.grid(linestyle="--")
-
-# ax.scatter([x for x in range(len(delta_losses))], delta_losses,label="normalized loss")
-
-# ax.legend()
-
-# ax2 = ax.twinx()
-# ax2.set_ylabel("Bike Amount")
-# ax2.scatter([x for x in range(len(delta_losses))], [y*max_val_ for y in delta_losses],label="bike amount difference")
-# ax2.set_ylim([0.0, 1])
-# plt.savefig(
-#     "./04.event_prediction/event_prediction_results/"
-#     + "00.delta_loss"
-#     + "_"
-#     + str(input_day * 24)
-#     + "_"
-#     + str(output_day * 24)
-#     + "_"
-#     + str(epoch)
-#     + ".png",
-#     dpi=500,
-#     edgecolor="white",
-#     bbox_inches="tight",
-#     pad_inches=0.2,
-# )
-
-# #LOSS#scatter###########################################
-# fig, ax = plt.subplots(figsize=(20, 5))
-# plt.ylabel("Bike Amount Difference", fontsize = 12)
-
-# def mean_stddev_(error_list):
-#     stddev_list = []
-#     mean_list = []
-#     for errors in error_list:
-#         mean = sum(errors) / len(errors)
-#         variance = sum([((x - mean) ** 2) for x in errors]) / len(errors)
-#         res = variance ** 0.5
-        
-#         mean_list.append(mean)
-#         stddev_list.append(res)
-#     return mean_list,stddev_list
-# plt.xlabel("Offset (10 mins interval)",fontsize = 12)
-
-# mean_,std_dev_ = mean_stddev_(losses_rmse)
-# plt.scatter([i for i in range(len(mean_))], mean_,s=50)
-# plt.errorbar([i for i in range(len(mean_))], mean_,yerr =std_dev_)
-
-# ax.legend()
-# plt.savefig(
-#     "./04.event_prediction/event_prediction_results/"
-#     + "00.delta_loss"
-#     + "_station_wise"
-#     + str(input_day * 24)
-#     + "_"
-#     + str(output_day * 24)
-#     + "_"
-#     + str(epoch)
-#     + ".png",
-#     dpi=500,
-#     edgecolor="white",
-#     bbox_inches="tight",
-#     pad_inches=0.2,
-# )
-
-# #Precision and Accuracy Preperation (Update Required)
-# predictions_plot_cate = []  # tensor list
-# labels_plot_cate = []  # tensor list
-# for data in zip(predictions_cate, labels_cate):
-#     if predictions_plot_cate == []:
-#         predictions_plot_cate = data[0]
-#     else:
-#         predictions_plot_cate.append(data[0][-1])
-#     if labels_plot_cate == []:
-#         labels_plot_cate = data[1]
-#     else:
-#         labels_plot_cate.append(data[1][-1])
-        
-# def acc_cal(pred, tar,num_labels = 3):
-#     cnt = [0 for x in range(num_labels)]
-#     correct = [0 for x in range(num_labels)]
-#     for xy in zip(pred,tar):
-#         cnt[xy[1]]+=1
-#         if xy[0]==xy[1]:
-#             correct[xy[1]]+=1
-#     # total acc, precision list
-#     acc = round(sum(correct)/sum(cnt)*100,2)
-#     prec = []
-#     for x in zip(correct, cnt):
-#         if x[1] != 0:
-#             prec.append(round(x[0]/x[1]*100,2))
-#         elif x[1] == 0:
-#             prec.append(round(x[0]/(x[1]+1)*100,2))
-#     return acc, prec
-    
-# cate_acc = []
-# cate_precision_classes = [[] for x in range(len(boundary)-1)]
-# # cate_c1 = []
-# # cate_c2 = []
-# # cate_c3 = []
-# for set_ in  zip(predictions_plot_cate, labels_plot_cate):
-#     acc, prec = acc_cal(set_[0],set_[1],len(boundary)-1)
-#     cate_acc.append(acc)
-#     for c, prec_class in enumerate(cate_precision_classes):
-#         prec_class.append(prec[c])
-#     # cate_c1.append(prec[0])
-#     # cate_c2.append(prec[1])
-#     # cate_c3.append(prec[2])
-# for cate_c in cate_precision_classes:
-#     print(len(cate_c))
-# # print(len(cate_c1))
-# # print(len(cate_c2))
-# # print(len(cate_c3))
-
-
-# # Precisions (Update Required)
-# fig, ax = plt.subplots(figsize=(20, 5))
-# plt.ylabel("Precision(%)", fontsize = 12)
-
-# plt.ylim([0, 100])
-# plt.xlabel("Offset (10 mins interval)",fontsize = 12)
-# # plt.scatter(plotx_[0][0:input_seq_len], input_.tolist()[0], s=90, label='input')
-# labels = []
-# for b in range(1,len(boundary)-1):
-#     labels.append(str(int(boundary[b-1]*100))+"~"+str(int(boundary[b]*100)))
-# labels.append(str(int(boundary[-1]*100))+"~"+"100")
-# # labels = boundary[1:-1]
-# for c, cate_c in enumerate(cate_precision_classes):
-#     plt.plot([x for x in range(len(cate_c))], cate_c, label=labels[c])
-#     plt.text(
-#             len(cate_c),
-#             cate_c[-1]+1,
-#             "Avg.Acc.: "
-#             + str(round(sum(cate_c) / len(cate_c),2)),
+#         plt.savefig(
+#             dir_path
+#             + "00.station_loss"
+#             + "_"
+#             + str(input_day * 24)
+#             + "_"
+#             + str(output_day * 24)
+#             + "_"
+#             + str(epoch)
+#             + "_"+model.model_name
+#             +"_"+str(len(boundary)-1)
+#             +"_"+str(file)
+#             + ".png",
+#             dpi=500,
+#             edgecolor="white",
+#             bbox_inches="tight",
 #         )
-# plt.legend()
-# # plt.show()
-# plt.savefig(
-#     "./04.event_prediction/event_prediction_results/"
-#     + "00.precisions"
-#     + "_"
-#     + str(input_day * 24)
-#     + "_"
-#     + str(output_day * 24)
-#     + "_"
-#     + str(epoch)
-#     + ".png",
-#     dpi=500,
-#     edgecolor="white",
-#     bbox_inches="tight",
-#     pad_inches=0.2,
-# )
+#         file+=1
+        
+        

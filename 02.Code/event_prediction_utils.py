@@ -32,9 +32,9 @@ class _progressbar_printer:
             print("\nCompleted\n")
 
 # Path config
-data_path = "./00.datasets/chicago_bike_dataset/"
+data_path = "./03.Data/xx.chicago_bike_dataset/"
 
-root_path = "./04.event_prediction/"
+root_path = "./02.Code/"
 code_path = ""
 model_weight_path = root_path+"trained_model_weights/"
 plot_path = root_path+"event_prediction_results/"
