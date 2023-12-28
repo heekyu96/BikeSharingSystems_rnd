@@ -36,7 +36,7 @@ train= False
 
 # Hyper-Params
 epoch = 100
-batch_size = 500
+batch_size = 500 
 dropout_rate = 0.5
 
 # Model Input and Output Shape

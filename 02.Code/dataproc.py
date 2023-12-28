@@ -212,7 +212,7 @@ class StationDataset(Dataset):
 if __name__ == "__main__":
     import sys
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    data_path = "../03.Data/"
+    data_path = "./03.Data/"
     file_count = 10
     # Train Model or Use Trained Model Weight
     train= False
