@@ -65,6 +65,8 @@ historical_station_dataset = StationDataset(
 )
 # Model Construction
 # model = Prediction_Model_v5_LSTM_FFT(
+    
+# LSTM 모델 model 선언
 model = Prediction_Model_v3_LSTM(
     unit_input_dim=historical_station_dataset.station_count,
     unit_hidden_dim=256,
@@ -97,56 +99,69 @@ if not train:
         + "_"+ str(epoch)
         + ".pt",
         map_location=DEVICE,
-    )
-    model.load_state_dict(model_weight)
+    ) # 해당 파일 경로의 weight 불러오기
+    model.load_state_dict(model_weight) # 모델에 weight 적용
+    
 else: # Train
-    historical_station_dataset.set_train()
+    historical_station_dataset.set_train() # mode = "train"
     train_batch_size = batch_size
     # train_batch_size = batch_size * output_seq_len
-    train_loader = DataLoader(historical_station_dataset, train_batch_size)
+    train_loader = DataLoader(historical_station_dataset, train_batch_size) # 데이터 올리기
     
     model.train() # setup train mode
     
     train_progress = _progressbar_printer("Model Training", iterations=epoch) # status bar
+    
     for i in range(epoch):
-        losses = 0
-        losses_cate = 0
+        losses = 0      # pred
+        losses_cate = 0 # class
         re = 0
         # output_cnt = 1
         start_time = timer()
+        
         for batch_idx, data in enumerate(train_loader):
             # tr_x, tr_y = data
+            
+            # Fast Fourier Transform한 LSTM이면
             if model.model_name.__contains__("FFT"):
                 tr_x, tr_y, tr_x_fft, tr_y_cate = data
+
             else:
                 tr_x, tr_y, tr_y_cate = data
 
             # print(tr_x.shape)
-            optimizer.zero_grad()
+            optimizer.zero_grad() # 옵티마이저 초기화
             # outputs = model(tr_x)
+            
             
             # bike amount output branch
             if model.model_name.__contains__("FFT"):
                 outputs, outputs_cate = model(tr_x,tr_x_fft)
             else:
                 outputs, outputs_cate = model(tr_x)
+                
+            # loss calculation 1
+            loss = loss_function(outputs, tr_y)
 
-            loss = loss_function(outputs, tr_y) # loss calculation
 
             # event classes output branch
             output_cate_dim = outputs_cate.shape[-1]
             outputs_cate = outputs_cate[:].view(-1, output_cate_dim)
             tr_y_cate = tr_y_cate[:].view(-1)
-            loss_cate = loss_function_cate(outputs_cate, tr_y_cate) # loss calculation
+            
+            # loss calculation 2
+            loss_cate = loss_function_cate(outputs_cate, tr_y_cate)
+            
             
             # Backpropagation
-            loss.backward(retain_graph= True)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
-            loss_cate.backward()
+            loss.backward(retain_graph= True) # loss 1에 대해 bp
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm) # gradient exploding 방지 위해 clipping
+            loss_cate.backward() # loss 2에 대해 bp
             
-            optimizer.step()
+            optimizer.step() # 위에서 계산된 그라디언트로 모델의 가중치 업데이트 (학습)
             
             # Drop back-propagation tree and save only numerical loss value
+            # loss 1과 2에 대해 loss값 기록
             losses += loss.item()
             losses_cate += loss_cate.item()
 
@@ -177,9 +192,10 @@ else: # Train
         end_time = timer()
         train_progress._progressBar(i+1, end_time - start_time)
 
+
 # Test
 test_batch_size = 1
-historical_station_dataset.set_test()
+historical_station_dataset.set_test() # mode = "test"
 test_loader = DataLoader(historical_station_dataset, test_batch_size)
 input_for_per_station_plot = []
 output_for_per_station_plot = []
@@ -195,6 +211,8 @@ losses = 0
 delta_losses = [0 for x in range(output_seq_len)]
 
 test_progress = _progressbar_printer("Model Testing", iterations=len(test_loader))
+
+
 for batch_idx, data in enumerate(test_loader):
     start_time = timer()
 
@@ -214,7 +232,8 @@ for batch_idx, data in enumerate(test_loader):
         cur = tr_x
         delta_loss = 0
         input_for_per_station_plot.append(np.transpose(tr_x.cpu().squeeze().data))
-
+        # tr_x.cpu().squeeze() : cpu로 이동 후 squeeze (차원이 1이면 해당 차원 제거)
+        
     if model.model_name.__contains__("FFT"):
         output_tensor,output_cate_tensor = model(tr_x,tr_x_fft)
     else:
@@ -223,13 +242,17 @@ for batch_idx, data in enumerate(test_loader):
     # 출력저장
     if DEVICE == torch.device("cuda"):
         output = output_tensor.cpu().squeeze().data
-        output_cate = torch.argmax(output_cate_tensor.cpu().squeeze().data,dim=-1)
+        output_cate = torch.argmax(output_cate_tensor.cpu().squeeze().data,dim=-1) # output_cate: 가장 확률이 높은 클래스 선택
         # output = np.transpose(output) # 0:time-steps, 1:stations
-        output_p = np.array(output)
-        target = tr_y.cpu().squeeze().data  #
-        target = np.transpose(target)  # 0:time-steps, 1:stations
+        output_p = np.array(output) # output은 왜 transpose 안하는지?
+        # output_p: output을 squeeze 후 tanspose
+        
+        target = tr_y.cpu().squeeze().data
+        target = np.transpose(target)  # 0:time-steps, 1:stations 
         target_p = np.array(target)
+        # target_p: tr_y를 squeeze 후 transpose
         target_cate = tr_y_cate.cpu().squeeze()
+        
     else:
         output = output_tensor.squeeze().data
         output_p = np.array(output)
@@ -294,25 +317,23 @@ max_val_ = historical_station_dataset.max_val
 rmse_list = []
 rmse_cate_pred = []
 rmse_per_station_list = []
-for pred_label in zip(predictions, labels):
+for pred_label in zip(predictions, labels): # pred_label = (predictions[0], labels[0])
     rmse_per_station = [[] for x in range(611)]
     rmse = [0 for x in range(0,144)]
     rmse_cate = []
-    
-    for d, pred_label_day in enumerate(zip(pred_label[0],pred_label[1])):
-        loss_list_per_station = root_mean_squared_error(pred_label_day[0],pred_label_day[1])
-        
+    for d, pred_label_day in enumerate(zip(pred_label[0],pred_label[1])): # pred_label_day = (predictions[0][0], labels[0][0]) ~ (predictions[0][143], labels[0][143])
+        loss_list_per_station = root_mean_squared_error(pred_label_day[0],pred_label_day[1]) # loss_list_per_station = 1일차의 rmse값 611개
         for ps in range(len(loss_list_per_station)):
-            rmse_per_station[ps].append(loss_list_per_station[ps])
-        rmse[d] = sum(loss_list_per_station)/len(loss_list_per_station)
-    rmse_list.append(rmse)
+            rmse_per_station[ps].append(loss_list_per_station[ps]) # rmse_per_station = [ps1, ps2, ps3, ps4, ... , ps611] : 1일차 611개 정거장 rmse
+        rmse[d] = sum(loss_list_per_station)/len(loss_list_per_station) # rmse = [d1, d2, ..., d144] : 각 time step 모든 정거장의 rmse 평균 값 144개
+    rmse_list.append(rmse) # [[d1, d2, ..., d144], [d2, d3, ..., d145], ...] 7200개
     rmse_per_station_list.append(rmse_per_station)
 
 
 rmse_day = [0 for x in range(0,144)]
 for rmse in rmse_list:
-    rmse_day = [x+y for x,y in zip(rmse_day,rmse)]
-rmse_day = [float(x)/len(rmse_list) for x in rmse_day]
+    rmse_day = [x+y for x,y in zip(rmse_day,rmse)] # 모든 일자에 대한 시간대별 RMSE 값의 '누적 합'
+rmse_day = [float(x)/len(rmse_list) for x in rmse_day] # 모든 일자에 대한 시간대별 RMSE 값의 평균
 
 ## RMSE_Confidential_Interval
 rmse_list_for_CI = np.array(rmse_list).transpose()
@@ -342,7 +363,7 @@ def mean_confidence_interval_rmse(points, max_val, confidence=0.95):
 rmse_m, rmse_ci_95_h,rmse_ci_95_l = mean_confidence_interval_rmse(rmse_list_for_CI, max_val=max_val_,confidence=0.925)
 rmse_m, rmse_ci_99_h,rmse_ci_99_l = mean_confidence_interval_rmse(rmse_list_for_CI, max_val=max_val_,confidence=0.99)
 # rmse_ci_99 = []
-
+"""
 ##loss plot
 fig, ax = plt.subplots(figsize=(20, 5))
 ax.set_ylabel("RMSE of normalized bike counts",fontsize=13)
@@ -618,4 +639,4 @@ plt.savefig(
 #         )
 #         file+=1
         
-        
+        """
